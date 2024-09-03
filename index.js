@@ -1,70 +1,59 @@
 const express = require('express');
-const { Server } = require("socket.io");
+const { createServer } = require('node:http')
+const  path  = require('node:path')
+const { Server } = require('socket.io');
+
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+
+const genAI = new GoogleGenerativeAI('AIzaSyCWD8R-irLSB8wFkiLR8d5NkA3xqZVYdQg');
+
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
 const app = express();
-const {createServer} = require('node:http')
-require('dotenv').config();
 
-const server = createServer(app);
+app.use(express.static('public'))
 
-const io = new Server(server)
+const server = createServer(app)
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const io = new Server(server);
 
-const genAI = new GoogleGenerativeAI(process.env.APIKey);
+io.on('connection', (socket) =>{
 
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-app.use(express.json());
-
-io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
-
-  socket.on('userMsg', async (msg)=>{
-    console.log(`User Prompt: ${msg}`);
-
+  socket.on('userMsg', async(message)=>{
     try {
-      const botResponse = await model.generateContent(msg);
-      const result = botResponse.response.text();
-      socket.emit(`Result: ${result}`)
+      const botResult = await model.generateContent(message);
+      const result = botResult.response.text();
+      io.emit("result", result);
     } catch (error) {
-      socket.emit(`Error Occured: ${error.message}`)
+      io.emit("result", error.message)
     }
-    
-    socket.on('disconnect', () => {
-      console.log(`User Disconnected`);
-    })
   })
 })
 
 
-app.post('/' , async (req, res) => {
 
-  const { userMsg } = req.body;
-  
-  if(!userMsg){    
-    res.status(400).json({message : "No query present"})
-  }
-
+app.get('/', async(req, res) => {
   try {
-    const botResponse = await model.generateContent(userMsg);
-    const result = botResponse.response.text();
-    res.status(200).json({AiMsg : result})  
+    res.sendFile(path.join(__dirname, 'index.html'));  
   } catch (error) {
-    res.status(500).json({error: error.message})
+    res.status(400).json({error: error.message});
   }
-})
-
-const port = 3000
-
-app.listen(port, () => {
-  console.log(`
-    ==================
-    ==================
-    = Server Started =
-    ==================
-    ==================
-    === Port  ${port} ===
-    ==================
-    ==================
-  `);
 });
+
+
+
+const port = 3000;
+server.listen(port , () => {
+
+  console.log(`
+    =====================
+    == Server Started  ==
+    =====================
+    ==== Port ${port}  =====
+    =====================
+    =====================
+    `);
+  
+
+})
